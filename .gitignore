@@ -13,3 +13,4 @@ result_page_*.svg
 result_page_*.svg.png
 __pycache__
 *.pyc
+.pytest_cache
