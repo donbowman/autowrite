@@ -12,8 +12,8 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
     if isinstance(page, dict):
         line_height = page.get("line_height", 32)
         total_lines_per_page = page.get("total_lines", 24)
-        view_height = page.get("view_height", 896)
-        view_width = page.get("view_width", 632)
+        view_height = page.get("view_height", 210)
+        view_width = page.get("view_width", 148)
         margin_left = page.get("margin_left", -64)
         margin_top = page.get("margin_top", -96)
         page_color = page.get("page_color", "white")
@@ -30,7 +30,7 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
             page_color,
             margin_color,
             line_color,
-        ) = page or [32, 24, 896, 632, -64, -96, "white", "red", "lightgray"]
+        ) = page or [32, 24, 210, 148, -64, -96, "white", "red", "lightgray"]
 
     # Initialize G-code variables
     gcode_lines = [
@@ -42,6 +42,12 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
         "G0 X0 Y0 ; Move to start position (0,0)"
     ]
     px_to_mm = 25.4 / 96.0
+    
+    # Convert parameters that were in px to mm
+    line_height *= px_to_mm
+    margin_left *= px_to_mm
+    margin_top *= px_to_mm
+
     pen_is_down = False
 
     def add_gcode(cmd):
@@ -61,22 +67,24 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
 
     def move_to_gcode(x, y):
         pen_up()
-        add_gcode(f"G0 X{x * px_to_mm:.3f} Y{y * px_to_mm:.3f}")
+        add_gcode(f"G0 X{x:.3f} Y{y:.3f}")
 
     def line_to_gcode(x, y):
         pen_down()
-        add_gcode(f"G1 X{x * px_to_mm:.3f} Y{y * px_to_mm:.3f} F2000")
+        add_gcode(f"G1 X{x:.3f} Y{y:.3f} F2000")
 
     # Initialize the SVG drawing
     dwg = svgwrite.Drawing(
-        filename=filename, size=(f"{view_width}px", f"{view_height}px")
+        filename=filename, size=(f"{view_width}mm", f"{view_height}mm")
     )
     dwg.viewbox(width=view_width, height=view_height)
 
     from autowrite.handwriting_synthesis.config import background
 
+    bg_group = dwg.g(id="background")
+
     if background:
-        dwg.add(
+        bg_group.add(
             dwg.rect(insert=(0, 0), size=(view_width, view_height), fill=page_color)
         )
 
@@ -85,7 +93,7 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
             y_position = (
                 line_height * (i + 1) - margin_top
             )  # Adjust as needed to align with text
-            dwg.add(
+            bg_group.add(
                 dwg.line(
                     start=(0, y_position),
                     end=(view_width, y_position),
@@ -93,10 +101,8 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
                     stroke_width=1,
                 )
             )
-            move_to_gcode(0, y_position)
-            line_to_gcode(view_width, y_position)
 
-        dwg.add(
+        bg_group.add(
             dwg.line(
                 start=(-margin_left + line_height / 2, 0),
                 end=(-margin_left + line_height / 2, view_height),
@@ -104,10 +110,8 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
                 stroke_width=1,
             )
         )
-        move_to_gcode(-margin_left + line_height / 2, 0)
-        line_to_gcode(-margin_left + line_height / 2, view_height)
 
-        dwg.add(
+        bg_group.add(
             dwg.line(
                 start=(-margin_left + line_height / 2 - 5, 0),
                 end=(-margin_left + line_height / 2 - 5, view_height),
@@ -115,10 +119,8 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
                 stroke_width=1,
             )
         )
-        move_to_gcode(-margin_left + line_height / 2 - 5, 0)
-        line_to_gcode(-margin_left + line_height / 2 - 5, view_height)
 
-        dwg.add(
+        bg_group.add(
             dwg.line(
                 start=(0, -margin_top),
                 end=(view_width, -margin_top),
@@ -126,10 +128,8 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
                 stroke_width=1,
             )
         )
-        move_to_gcode(0, -margin_top)
-        line_to_gcode(view_width, -margin_top)
 
-        dwg.add(
+        bg_group.add(
             dwg.line(
                 start=(0, -margin_top - 5),
                 end=(view_width, -margin_top - 5),
@@ -137,8 +137,8 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
                 stroke_width=1,
             )
         )
-        move_to_gcode(0, -margin_top - 5)
-        line_to_gcode(view_width, -margin_top - 5)
+
+        dwg.add(bg_group)
 
     initial_coord = np.array([margin_left, margin_top - line_height / 2])
 
@@ -154,7 +154,7 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
             continue
 
         # Convert offsets to coordinates and adjust them
-        offsets[:, :2] *= 1
+        offsets[:, :2] *= px_to_mm
         strokes = drawing.offsets_to_coords(offsets)
         strokes = drawing.denoise(strokes)
         strokes[:, :2] = drawing.align(strokes[:, :2])
@@ -172,14 +172,19 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
                 line_to_gcode(x, y)
             prev_eos = eos
         path = svgwrite.path.Path(p)
-        path = path.stroke(color=color, width="1px", linecap="round", linejoin="round").fill("none")
+        path = path.stroke(color=color, width=f"{width * px_to_mm:.3f}mm", linecap="round", linejoin="round").fill("none")
         dwg.add(path)
 
         initial_coord[1] -= line_height
 
-    # Save the SVG file and convert to PNG
+    # Save the SVG file and convert to PNG (with background)
     dwg.save()
     cairosvg.svg2png(url=filename, write_to=filename + ".png")
+
+    # Remove background and save SVG again without it
+    if background and bg_group in dwg.elements:
+        dwg.elements.remove(bg_group)
+        dwg.save()
 
     # Save the G-code file
     pen_up()
