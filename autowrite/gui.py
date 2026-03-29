@@ -249,7 +249,7 @@ def update_preview():
         margin_left = int(margin_left_entry.get()) * -1
         margin_top = int(margin_top_entry.get()) * -1
 
-        autowrite.handwriting_synthesis.config.background = background_var.get()
+        autowrite.handwriting_synthesis.config.background = False
 
         alphabet = [
             "\x00",
@@ -428,7 +428,7 @@ def on_generate():
         margin_left = int(margin_left_entry.get()) * -1
         margin_top = int(margin_top_entry.get()) * -1
 
-        autowrite.handwriting_synthesis.config.background = background_var.get()
+        autowrite.handwriting_synthesis.config.background = False
 
         if total_lines_per_page < lines_per_page:
             messagebox.showwarning(
@@ -547,91 +547,6 @@ def on_generate():
         messagebox.showerror("Error", str(e))
 
 
-def choose_page_color():
-    global page_preview, selected_page_color
-    # Open color picker dialog to select page background color
-    color = askcolor()[1]
-    if color and page_preview:
-        # Update the page preview rectangle with the selected color
-        canvas.itemconfig(page_preview, fill=color)
-        selected_page_color = color
-        page_color_button.config(bg=color)
-        print(f"Selected Page Color: {color}")
-
-
-def choose_margin_color():
-    global margin_left_line, margin_top_line, selected_margin_color
-    # Open the color picker dialog and get the selected color
-    color = askcolor()[
-        1
-    ]  # The askcolor() function returns a tuple (rgb, hex), so we take the second element for the hex value.
-
-    if color and margin_left_line and margin_top_line:
-        # Update the margin lines with the selected color
-        canvas.itemconfig(margin_left_line, fill=color)  # Update left margin line color
-        canvas.itemconfig(margin_top_line, fill=color)  # Update top margin line color
-        selected_margin_color = color
-        margin_color_button.config(bg=color)
-        print(f"Selected Margin Color: {color}")
-
-
-def choose_line_color():
-    global selected_line_color
-    # Open the color picker dialog and get the selected color
-    color = askcolor()[1]  # Get the hex value of the selected color
-
-    if color:
-        # Update the color of the lines in the preview canvas
-        for item in canvas.find_withtag("horizontal_line"):
-            # Check if the item is a line by looking at its type
-            if canvas.type(item) == "line":
-                canvas.itemconfig(item, fill=color)  # Update the color
-        line_color_button.config(bg=color)  # Change the button color as a visual cue
-        selected_line_color = color
-        print(f"Selected Line Color: {color}")
-
-
-def reset_default():
-    # Default values as per your 'fields' list
-    default_values = {
-        "Line Length (characters)": "60",
-        "Total Lines Per Page": "24",
-        "Lines Written Per Page": "24",
-        "Handwriting Consistency": "0.98",
-        "Pen Thickness": "1",
-        "Line Height": "32",
-        "View Height": "896",
-        "View Width": "633.472",
-        "Margin Left": "64",
-        "Margin Top": "96",
-    }
-
-    # Reset all entries to their default values
-    for label, default in default_values.items():
-        entries[label].delete(0, tk.END)
-        entries[label].insert(0, default)
-
-    # Reset the styles combobox to default value
-    styles_combobox.set("1")
-    # reset the page, margin and line colors
-    global selected_page_color, selected_margin_color, selected_line_color
-    selected_page_color = "white"
-    selected_margin_color = "red"
-    selected_line_color = "lightgray"
-    # reset the color buttons to have no color at all
-    page_color_button.config(bg="#d9d9d9")
-    margin_color_button.config(bg="#d9d9d9")
-    line_color_button.config(bg="#d9d9d9")
-
-    # reset color combo box
-    color_combobox.set("Black")
-    update_style_label()
-
-    # Optionally, you can reset the canvas or other UI components as well
-    canvas.delete("all")  # Clear the preview canvas
-    update_preview()
-
-
 # Update the style value label when the style selection changes
 
 
@@ -701,16 +616,14 @@ text_box.bind("<FocusOut>", on_focus_out)
 # Add the banner image at the top of the parameter frame
 # Parameter input fields
 fields = [
-    ("Line Length (characters)", "60"),
-    ("Total Lines Per Page", "24"),
-    ("Lines Written Per Page", "24"),
+    ("Line Length (characters)", "50"),
+    ("Total Lines Per Page", "30"),
+    ("Lines Written Per Page", "30"),
     ("Handwriting Consistency", "0.98"),
-    ("Pen Thickness", "1"),
+    ("Pen Thickness", "0.5"),
     ("Line Height", "32"),
-    ("View Height", "896"),
-    ("View Width", "633.472"),
-    ("Margin Left", "64"),
-    ("Margin Top", "96"),
+    ("Margin Left", "32"),
+    ("Margin Top", "32"),
 ]
 entries = {}
 
@@ -732,66 +645,118 @@ handwriting_consistency_entry = entries["Handwriting Consistency"]
 pen_thickness_entry = entries["Pen Thickness"]
 line_height_entry = entries["Line Height"]
 total_lines_entry = entries["Total Lines Per Page"]
-view_height_entry = entries["View Height"]
-view_width_entry = entries["View Width"]
 margin_left_entry = entries["Margin Left"]
 margin_top_entry = entries["Margin Top"]
 
 # Styles dropdown (combobox)
 tk.Label(param_frame, text="Writing Style:").grid(
-    row=len(fields) + 3, column=0, padx=5, pady=5, sticky="e"
+    row=len(fields) + 2, column=0, padx=5, pady=5, sticky="e"
 )
 styles_combobox = ttk.Combobox(
     param_frame, values=[str(i) for i in range(1, 13)], state="readonly"
 )
 styles_combobox.set("1")  # Default value
-styles_combobox.grid(row=len(fields) + 3, column=1, padx=5, pady=5, sticky="ew")
+styles_combobox.grid(row=len(fields) + 2, column=1, padx=5, pady=5, sticky="ew")
 
-# Color dropdown (combobox)
-tk.Label(param_frame, text="Ink Color:").grid(
-    row=len(fields) + 2, column=0, padx=5, pady=5, sticky="e"
+# Colour dropdown (combobox)
+tk.Label(param_frame, text="Ink Colour:").grid(
+    row=len(fields) + 3, column=0, padx=5, pady=5, sticky="e"
 )
 color_combobox = ttk.Combobox(
     param_frame, values=["Black", "Blue", "Red", "Green"], state="readonly"
 )
-color_combobox.set("Black")  # Default value
-color_combobox.grid(row=len(fields) + 2, column=1, padx=5, pady=5, sticky="ew")
+color_combobox.set("Blue")  # Default value
+color_combobox.grid(row=len(fields) + 3, column=1, padx=5, pady=5, sticky="ew")
 
-tk.Label(param_frame, text="").grid(
-    row=len(fields) + 4, column=0, padx=5, pady=5, sticky="e"
-)  # Spacer
-background_var = tk.BooleanVar(value=True)
-background_check = tk.Checkbutton(
-    param_frame, text="Background (lines/header)", variable=background_var
-)
-background_check.grid(row=len(fields) + 4, column=0, columnspan=2, padx=5, pady=5)
+# Page size radio buttons
+page_size_frame = tk.Frame(param_frame)
+page_size_frame.grid(row=len(fields) + 4, column=0, columnspan=2, pady=5, sticky="ew")
+
+tk.Label(page_size_frame, text="Page Size:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+page_size_var = tk.StringVar(value="a5")
+
+# Custom size entries
+custom_size_frame = tk.Frame(param_frame)
+custom_size_frame.grid(row=len(fields) + 5, column=0, columnspan=2, pady=5, sticky="ew")
+
+tk.Label(custom_size_frame, text="View Width (mm):").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+view_width_entry = ttk.Entry(custom_size_frame, width=8)
+view_width_entry.insert(0, "148")
+view_width_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+
+tk.Label(custom_size_frame, text="View Height (mm):").grid(row=0, column=2, padx=5, pady=5, sticky="e")
+view_height_entry = ttk.Entry(custom_size_frame, width=8)
+view_height_entry.insert(0, "210")
+view_height_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+
+view_width_entry.config(state="disabled")
+view_height_entry.config(state="disabled")
+
+page_sizes = {
+    "a6": (105, 148),
+    "a5": (148, 210),
+    "a4": (210, 297),
+    "letter": (215.9, 279.4),
+    "custom": (148, 210)
+}
+
+def on_page_size_change():
+    size = page_size_var.get()
+    if size == "custom":
+        view_width_entry.config(state="normal")
+        view_height_entry.config(state="normal")
+        # default to a5 if custom is selected and empty/disabled previously
+        if not view_width_entry.get():
+            view_width_entry.insert(0, "148")
+            view_height_entry.insert(0, "210")
+    else:
+        view_width_entry.config(state="normal")
+        view_height_entry.config(state="normal")
+        view_width_entry.delete(0, tk.END)
+        view_height_entry.delete(0, tk.END)
+        w, h = page_sizes[size]
+        view_width_entry.insert(0, str(w))
+        view_height_entry.insert(0, str(h))
+        view_width_entry.config(state="disabled")
+        view_height_entry.config(state="disabled")
+
+col_idx = 1
+for size_name in ["a6", "a5", "a4", "letter", "custom"]:
+    rb = ttk.Radiobutton(page_size_frame, text=size_name.capitalize(), variable=page_size_var, value=size_name, command=on_page_size_change)
+    rb.grid(row=0, column=col_idx, padx=5, pady=5)
+    col_idx += 1
 
 # Buttons for preview and generate
-page_button_frame = tk.Frame(param_frame)
-page_button_frame.grid(
-    row=len(fields) + 5, column=0, columnspan=2, pady=5, padx=0, sticky="ew"
+button_frame = tk.Frame(param_frame)
+button_frame.grid(
+    row=len(fields) + 6, column=0, columnspan=2, pady=5, padx=0, sticky="ew"
 )
 
 # Configure columns to expand equally
-page_button_frame.grid_columnconfigure(0, weight=1, uniform="button")
-page_button_frame.grid_columnconfigure(1, weight=1, uniform="button")
-page_button_frame.grid_columnconfigure(2, weight=1, uniform="button")
+button_frame.grid_columnconfigure(0, weight=1, uniform="button")
+button_frame.grid_columnconfigure(1, weight=1, uniform="button")
 
-page_color_button = tk.Button(
-    page_button_frame, text="Page Color", command=choose_page_color, relief="groove"
-)
-page_color_button.grid(row=0, column=0, sticky="ew", padx=5)
+# Add Preview and Generate buttons
+preview_button = ttk.Button(button_frame, text="Preview", command=update_preview)
+preview_button.grid(row=0, column=0, sticky="ew", padx=5)
 
-margin_color_button = tk.Button(
-    page_button_frame, text="Margin Color", command=choose_margin_color, relief="groove"
-)
-margin_color_button.grid(row=0, column=1, sticky="ew", padx=5)
+generate_button = ttk.Button(button_frame, text="Generate", command=on_generate)
+generate_button.grid(row=0, column=1, sticky="ew", padx=5)
 
-line_color_button = tk.Button(
-    page_button_frame, text="Line Color", relief="groove", command=choose_line_color
-)
-line_color_button.grid(row=0, column=2, sticky="ew", padx=5)
 
+# Create a frame for the style display (below the buttons in the left section)
+style_frame = tk.Frame(param_frame)
+style_frame.grid(row=len(fields) + 7, column=0, columnspan=2, pady=10)
+
+# Label to show the selected style value (now will display an image)
+style_value_label = tk.Label(style_frame)
+style_value_label.grid(row=0, column=1, padx=10, pady=5, sticky="w")
+
+# Bind the update_style_label function to the combobox event
+styles_combobox.bind("<<ComboboxSelected>>", update_style_label)
+
+# Initialize the style display with the default selected style (usually "1")
+root.after(100, update_style_label)
 
 # Display values on right side (bottom section)
 value_frame = tk.Frame(root)
@@ -809,43 +774,6 @@ save_preview_button.pack(side="left", padx=5)
 
 print_button = ttk.Button(preview_button_frame, text="PRINT", command=print_gcode)
 print_button.pack(side="left", padx=5)
-
-# Buttons for preview and generate
-button_frame = tk.Frame(param_frame)
-button_frame.grid(
-    row=len(fields) + 5, column=0, columnspan=2, pady=5, padx=0, sticky="ew"
-)
-
-# Configure columns to expand equally
-button_frame.grid_columnconfigure(0, weight=1, uniform="button")
-button_frame.grid_columnconfigure(1, weight=1, uniform="button")
-button_frame.grid_columnconfigure(2, weight=1, uniform="button")
-
-# Add Preview and Generate buttons
-preview_button = ttk.Button(button_frame, text="Preview", command=update_preview)
-preview_button.grid(row=0, column=0, sticky="ew", padx=5)
-
-generate_button = ttk.Button(button_frame, text="Generate", command=on_generate)
-generate_button.grid(row=0, column=1, sticky="ew", padx=5)
-
-# Rest to Default button
-reset_button = ttk.Button(button_frame, text="Reset Default", command=reset_default)
-reset_button.grid(row=0, column=2, sticky="ew", padx=5)
-
-
-# Create a frame for the style display (below the buttons in the left section)
-style_frame = tk.Frame(param_frame)
-style_frame.grid(row=len(fields) + 6, column=0, columnspan=2, pady=10)
-
-# Label to show the selected style value (now will display an image)
-style_value_label = tk.Label(style_frame)
-style_value_label.grid(row=0, column=1, padx=10, pady=5, sticky="w")
-
-# Bind the update_style_label function to the combobox event
-styles_combobox.bind("<<ComboboxSelected>>", update_style_label)
-
-# Initialize the style display with the default selected style (usually "1")
-root.after(100, update_style_label)
 
 
 root.after(100, update_preview)
