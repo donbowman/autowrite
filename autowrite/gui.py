@@ -602,6 +602,7 @@ root.grid_columnconfigure(2, weight=4, uniform="col")
 # Frame for parameter inputs (left)
 param_frame = tk.Frame(root)
 param_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+param_frame.grid_columnconfigure(1, weight=1)
 
 # Text input box (middle)
 text_box = tk.Text(
@@ -653,7 +654,7 @@ tk.Label(param_frame, text="Writing Style:").grid(
     row=len(fields) + 2, column=0, padx=5, pady=5, sticky="e"
 )
 styles_combobox = ttk.Combobox(
-    param_frame, values=[str(i) for i in range(1, 13)], state="readonly"
+    param_frame, values=[str(i) for i in range(1, 13)], state="readonly", width=15
 )
 styles_combobox.set("1")  # Default value
 styles_combobox.grid(row=len(fields) + 2, column=1, padx=5, pady=5, sticky="ew")
@@ -663,7 +664,7 @@ tk.Label(param_frame, text="Ink Colour:").grid(
     row=len(fields) + 3, column=0, padx=5, pady=5, sticky="e"
 )
 color_combobox = ttk.Combobox(
-    param_frame, values=["Black", "Blue", "Red", "Green"], state="readonly"
+    param_frame, values=["Black", "Blue", "Red", "Green"], state="readonly", width=15
 )
 color_combobox.set("Blue")  # Default value
 color_combobox.grid(row=len(fields) + 3, column=1, padx=5, pady=5, sticky="ew")
@@ -680,14 +681,14 @@ custom_size_frame = tk.Frame(param_frame)
 custom_size_frame.grid(row=len(fields) + 5, column=0, columnspan=2, pady=5, sticky="ew")
 
 tk.Label(custom_size_frame, text="View Width (mm):").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-view_width_entry = ttk.Entry(custom_size_frame, width=8)
+view_width_entry = ttk.Entry(custom_size_frame, width=10)
 view_width_entry.insert(0, "148")
 view_width_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
 
-tk.Label(custom_size_frame, text="View Height (mm):").grid(row=0, column=2, padx=5, pady=5, sticky="e")
-view_height_entry = ttk.Entry(custom_size_frame, width=8)
+tk.Label(custom_size_frame, text="View Height (mm):").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+view_height_entry = ttk.Entry(custom_size_frame, width=10)
 view_height_entry.insert(0, "210")
-view_height_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+view_height_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
 
 view_width_entry.config(state="disabled")
 view_height_entry.config(state="disabled")
@@ -721,10 +722,14 @@ def on_page_size_change():
         view_height_entry.config(state="disabled")
 
 col_idx = 1
+row_idx = 0
 for size_name in ["a6", "a5", "a4", "letter", "custom"]:
     rb = ttk.Radiobutton(page_size_frame, text=size_name.capitalize(), variable=page_size_var, value=size_name, command=on_page_size_change)
-    rb.grid(row=0, column=col_idx, padx=5, pady=5)
+    rb.grid(row=row_idx, column=col_idx, padx=5, pady=5)
     col_idx += 1
+    if col_idx > 3:
+        col_idx = 1
+        row_idx += 1
 
 # Buttons for preview and generate
 button_frame = tk.Frame(param_frame)
