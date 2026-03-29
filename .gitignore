@@ -1,0 +1,15 @@
+.venv
+
+model/data/raw/ascii
+model/data/raw/lineStrokes
+model/data/raw/original
+model/data/processed
+
+logs
+
+__pycache__
+/_main.py
+result_page_*.svg
+result_page_*.svg.png
+__pycache__
+*.pyc
