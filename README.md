@@ -7,6 +7,13 @@ optimised to work with [Jingan writing machines](https://jgxzj.com/)
 and generates true **single-stroke** centerlines so your pen plotter
 draws natural letters without outlining them!
 
+Run with
+`poetry run autowrite`
+
+after poetry install.
+
+![](screenshot.avif)
+
 ### Features
 - **True Single-Stroke Output:** Generates authentic single-line paths (both in SVG and G-Code formats) perfect for pen plotters.
 - **Direct Serial Printing:** Send G-Code directly to your Jingan writing machine over Bluetooth.

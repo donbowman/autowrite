@@ -851,4 +851,11 @@ root.after(100, update_style_label)
 root.after(100, update_preview)
 
 # Run the GUI
-root.mainloop()
+if __name__ == "__main__":
+    root.mainloop()
+
+def main():
+    try:
+        root.mainloop()
+    except Exception:
+        pass
