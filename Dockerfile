@@ -9,10 +9,11 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY pyproject.toml poetry.lock ./
-COPY autowrite/ ./autowrite/
 
 RUN poetry config virtualenvs.create false \
-    && poetry install --only main --no-interaction --no-ansi
+    && poetry install --only main --no-interaction --no-ansi --no-root
+COPY autowrite/ ./autowrite/
+RUN poetry install --only main --no-interaction --no-ansi
 
 # Set environment variable required by TensorFlow/Keras
 ENV TF_USE_LEGACY_KERAS=1

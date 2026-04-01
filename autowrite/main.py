@@ -31,8 +31,10 @@ class GenerateRequest(BaseModel):
     total_lines_per_page: int = 30
     view_height: float = 210.0
     view_width: float = 148.0
-    margin_left: int = 32
-    margin_top: int = 32
+    margin_left: int = 10
+    margin_right: int = 10
+    margin_top: int = 10
+    margin_bottom: int = 10
     page_color: str = "white"
     margin_color: str = "red"
     line_color: str = "lightgray"
@@ -57,22 +59,36 @@ def get_hand_instance():
 def process_text_to_pages(text: str, max_line_length: int, lines_per_page: int, alphabet: list):
     lines = [line.strip() if line.strip() else "." for line in text.split("\n")]
     
-    sanitized_lines = [
-        "".join(char if char in alphabet else " " for char in line) for line in lines
-    ]
+    sanitized_lines = []
+    for line in lines:
+        sanitized_char_list = []
+        for char in line:
+            if char in alphabet:
+                sanitized_char_list.append(char)
+            elif char.lower() in alphabet:
+                sanitized_char_list.append(char.lower())
+            else:
+                sanitized_char_list.append(" ")
+        sanitized_lines.append("".join(sanitized_char_list))
 
     wrapped_lines = []
     for line in sanitized_lines:
         words = line.split()
-        current_line = ""
-        for word in words:
-            if len(current_line) + len(word) + 1 > max_line_length:
+        if not words:
+            wrapped_lines.append("")
+        else:
+            current_line = ""
+            for word in words:
+                if current_line:
+                    if len(current_line) + len(word) + 1 > max_line_length:
+                        wrapped_lines.append(current_line.strip())
+                        current_line = word
+                    else:
+                        current_line += " " + word
+                else:
+                    current_line = word
+            if current_line:
                 wrapped_lines.append(current_line.strip())
-                current_line = word
-            else:
-                current_line += " " + word
-        if current_line:
-            wrapped_lines.append(current_line.strip())
 
     pages = [
         wrapped_lines[i : i + lines_per_page]
@@ -106,7 +122,9 @@ async def generate(req: GenerateRequest):
             "view_height": req.view_height,
             "view_width": req.view_width,
             "margin_left": -req.margin_left,
+            "margin_right": -req.margin_right,
             "margin_top": -req.margin_top,
+            "margin_bottom": -req.margin_bottom,
             "line_height": req.line_height,
             "total_lines": req.total_lines_per_page,
         }

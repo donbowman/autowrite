@@ -15,7 +15,9 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
         view_height = page.get("view_height", 210)
         view_width = page.get("view_width", 148)
         margin_left = page.get("margin_left", -64)
+        margin_right = page.get("margin_right", -64)
         margin_top = page.get("margin_top", -96)
+        margin_bottom = page.get("margin_bottom", -96)
         page_color = page.get("page_color", "white")
         margin_color = page.get("margin_color", "red")
         line_color = page.get("line_color", "lightgray")
@@ -26,11 +28,13 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
             view_height,
             view_width,
             margin_left,
+            margin_right,
             margin_top,
+            margin_bottom,
             page_color,
             margin_color,
             line_color,
-        ) = page or [32, 24, 210, 148, -64, -96, "white", "red", "lightgray"]
+        ) = page or [32, 24, 210, 148, -64, -64, -96, -96, "white", "red", "lightgray"]
 
     # Initialize G-code variables
     gcode_lines = [
@@ -38,6 +42,7 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
         "G21 ; Set units to millimeters",
         "G90 ; Set to absolute positioning",
         "G1 F2000 ; Set feed rate for move speed",
+        "G1 Z2 F800 ; PEN UP",
         "G1 Z0 F800 ; PEN UP",
         "G0 X0 Y0 ; Move to start position (0,0)"
     ]
@@ -46,7 +51,9 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
     # Convert parameters that were in px to mm
     line_height *= px_to_mm
     margin_left *= px_to_mm
+    margin_right *= px_to_mm
     margin_top *= px_to_mm
+    margin_bottom *= px_to_mm
 
     pen_is_down = False
 
@@ -57,12 +64,14 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
         nonlocal pen_is_down
         if pen_is_down:
             add_gcode("G1 Z0 F800 ; PEN UP")
+            add_gcode("G1 Z0 F800 ; PEN UP")
             pen_is_down = False
 
     def pen_down():
         nonlocal pen_is_down
         if not pen_is_down:
             add_gcode("G1 Z10 F800 ; PEN DOWN")
+            add_gcode("G1 Z15 F800 ; PEN DOWN")
             pen_is_down = True
 
     def move_to_gcode(x, y):
@@ -120,6 +129,26 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
             )
         )
 
+        # Right margin
+        bg_group.add(
+            dwg.line(
+                start=(view_width - (-margin_right + line_height / 2), 0),
+                end=(view_width - (-margin_right + line_height / 2), view_height),
+                stroke=margin_color,
+                stroke_width=1,
+            )
+        )
+
+        bg_group.add(
+            dwg.line(
+                start=(view_width - (-margin_right + line_height / 2 - 5), 0),
+                end=(view_width - (-margin_right + line_height / 2 - 5), view_height),
+                stroke=margin_color,
+                stroke_width=1,
+            )
+        )
+
+        # Top margin
         bg_group.add(
             dwg.line(
                 start=(0, -margin_top),
@@ -133,6 +162,25 @@ def _draw(strokes, lines, filename, stroke_colors=None, stroke_widths=None, page
             dwg.line(
                 start=(0, -margin_top - 5),
                 end=(view_width, -margin_top - 5),
+                stroke=margin_color,
+                stroke_width=1,
+            )
+        )
+
+        # Bottom margin
+        bg_group.add(
+            dwg.line(
+                start=(0, view_height - (-margin_bottom)),
+                end=(view_width, view_height - (-margin_bottom)),
+                stroke=margin_color,
+                stroke_width=1,
+            )
+        )
+
+        bg_group.add(
+            dwg.line(
+                start=(0, view_height - (-margin_bottom - 5)),
+                end=(view_width, view_height - (-margin_bottom - 5)),
                 stroke=margin_color,
                 stroke_width=1,
             )
