@@ -1,0 +1,6 @@
+#!/bin/bash
+tmux kill-session -t autowrite
+tmux new-session -d -s autowrite 'cd frontend; npm run dev' \; \
+    split-window -v 'TF_USE_LEGACY_KERAS=1 poetry run uvicorn autowrite.main:app --reload' \; \
+    attach-session -t autowrite
+
