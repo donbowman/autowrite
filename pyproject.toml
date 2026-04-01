@@ -21,6 +21,10 @@ svgwrite = "~1.4.0"
 tensorflow = "~2.21.0"
 tensorflow-probability = {version = "~0.25.0", extras = ["tf"]}
 pyserial = "^3.5"
+fastapi = "^0.135.2"
+uvicorn = "^0.42.0"
+pydantic = "^2.12.5"
+tf-keras = ">=2.15.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
