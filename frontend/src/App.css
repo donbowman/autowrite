@@ -160,7 +160,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 130px;
+  width: 180px;
 }
 
 .consistency-input input[type="range"] {
@@ -170,7 +170,7 @@ body {
 }
 
 .consistency-input .number-input {
-  width: 50px !important;
+  width: 60px !important;
   padding: 4px;
 }
 

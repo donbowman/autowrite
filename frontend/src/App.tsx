@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Settings, Printer, Eye, Download } from 'lucide-react';
+import { Settings, Printer, Eye, Download, X, Activity } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import './App.css';
@@ -18,7 +18,9 @@ interface Config {
   view_height: number;
   view_width: number;
   margin_left: number;
+  margin_right: number;
   margin_top: number;
+  margin_bottom: number;
   page_color: string;
   page_size: string;
   margin_color: string;
@@ -38,20 +40,51 @@ const defaultConfig: Config = {
   page_size: 'A5',
   view_height: 210,
   view_width: 148,
-  margin_left: 32,
-  margin_top: 32,
+  margin_left: 10,
+  margin_right: 10,
+  margin_top: 10,
+  margin_bottom: 10,
   page_color: '#FDFDFD',
   margin_color: '#FFCCCC',
   line_color: '#E0E0E0'
 };
 
 function App() {
-  const [config, setConfig] = useState<Config>(defaultConfig);
+  const [config, setConfig] = useState<Config>(() => {
+    const saved = localStorage.getItem('autowrite-config');
+    if (saved) {
+      try {
+        return { ...defaultConfig, ...JSON.parse(saved) };
+      } catch (e) {
+        return defaultConfig;
+      }
+    }
+    return defaultConfig;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('autowrite-config', JSON.stringify(config));
+  }, [config]);
+
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [gcodeContent, setGcodeContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [port, setPort] = useState<any>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [machineStatus, setMachineStatus] = useState<string | null>(null);
+  const [printLogs, setPrintLogs] = useState<{type: 'sent' | 'received' | 'info' | 'error', text: string}[]>([]);
+  const [printProgress, setPrintProgress] = useState(0);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const cancelPrintRef = useRef(false);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  const addLog = (type: 'sent' | 'received' | 'info' | 'error', text: string) => {
+    setPrintLogs(prev => [...prev, { type, text }]);
+    setTimeout(() => {
+      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -174,35 +207,181 @@ function App() {
       return;
     }
 
+    setIsPrinting(true);
+    setShowPrintModal(true);
+    setPrintLogs([]);
+    setPrintProgress(0);
+    cancelPrintRef.current = false;
+
     try {
       // @ts-ignore - Web Serial API might not be typed fully
-      const selectedPort = port || await navigator.serial.requestPort();
+      let selectedPort = port;
       
-      if (!port) {
+      if (!selectedPort) {
+        // @ts-ignore
+        selectedPort = await navigator.serial.requestPort();
         setPort(selectedPort);
       }
 
-      await selectedPort.open({ baudRate: 115200 });
+      try {
+        await selectedPort.open({ baudRate: 115200 });
+      } catch (e: any) {
+        if (e.name !== 'InvalidStateError' && !e.message?.includes('already open')) {
+          console.warn("Error opening port, trying to re-select", e);
+          try {
+             await selectedPort.close();
+          } catch (err) {}
+          // Re-select
+          // @ts-ignore
+          selectedPort = await navigator.serial.requestPort();
+          setPort(selectedPort);
+          await selectedPort.open({ baudRate: 115200 });
+        }
+      }
       
       const encoder = new TextEncoderStream();
       const writableStreamClosed = encoder.readable.pipeTo(selectedPort.writable);
       const writer = encoder.writable.getWriter();
 
-      const lines = gcodeContent.split('\n');
-      for (const line of lines) {
-        if (line.trim()) {
-          await writer.write(line + '\n');
-          // Add a small delay between lines if needed for standard serial streaming
-          await new Promise(r => setTimeout(r, 50));
-        }
-      }
+      const decoder = new TextDecoderStream();
+      const readableStreamClosed = selectedPort.readable.pipeTo(decoder.writable);
+      const reader = decoder.readable.getReader();
 
-      writer.close();
-      await writableStreamClosed;
+      const lines = gcodeContent.split('\n').filter(l => l.trim() !== '');
+      const totalLines = lines.length;
+
+      let resultBuffer = '';
+
+      try {
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (cancelPrintRef.current) {
+            addLog('info', 'Printing cancelled.');
+            break;
+          }
+          
+          await writer.write(line + '\n');
+          addLog('sent', line);
+          
+          let response = '';
+          while (true) {
+             const { value, done } = await reader.read();
+             if (done) break;
+             if (value) {
+                resultBuffer += value;
+                if (resultBuffer.includes('\n')) {
+                   const parts = resultBuffer.split('\n');
+                   for (let j = 0; j < parts.length - 1; j++) {
+                     response += parts[j] + '\n';
+                   }
+                   resultBuffer = parts[parts.length - 1];
+                   
+                   if (response.toLowerCase().includes('ok') || response.toLowerCase().includes('error')) {
+                     break;
+                   }
+                }
+             }
+          }
+          
+          addLog(response.toLowerCase().includes('error') ? 'error' : 'received', response.trim());
+          setPrintProgress(Math.round(((i + 1) / totalLines) * 100));
+        }
+        if (!cancelPrintRef.current) {
+          addLog('info', 'Print complete.');
+        }
+      } finally {
+        writer.close();
+        await writableStreamClosed;
+        reader.cancel();
+        reader.releaseLock();
+        await readableStreamClosed.catch(() => {});
+        await selectedPort.close();
+      }
       
     } catch (err: any) {
       console.error('Print Error:', err);
-      setError('Printing failed: ' + err.message);
+      addLog('error', 'Printing failed: ' + err.message);
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  const cancelPrint = () => {
+    cancelPrintRef.current = true;
+  };
+
+  const checkStatus = async () => {
+    try {
+      // @ts-ignore
+      let selectedPort = port;
+      
+      if (!selectedPort) {
+        // @ts-ignore
+        selectedPort = await navigator.serial.requestPort();
+        setPort(selectedPort);
+      }
+
+      try {
+        await selectedPort.open({ baudRate: 115200 });
+      } catch (e: any) {
+        // Ignore if already open
+        if (e.name !== 'InvalidStateError' && !e.message?.includes('already open')) {
+          console.warn("Error opening port, trying to re-select", e);
+          try {
+             await selectedPort.close();
+          } catch (err) {}
+          // @ts-ignore
+          selectedPort = await navigator.serial.requestPort();
+          setPort(selectedPort);
+          await selectedPort.open({ baudRate: 115200 });
+        }
+      }
+      
+      const encoder = new TextEncoderStream();
+      const writableStreamClosed = encoder.readable.pipeTo(selectedPort.writable);
+      const writer = encoder.writable.getWriter();
+
+      await writer.write('?\n');
+      writer.close();
+      await writableStreamClosed;
+
+      const decoder = new TextDecoderStream();
+      const readableStreamClosed = selectedPort.readable.pipeTo(decoder.writable);
+      const reader = decoder.readable.getReader();
+
+      let result = '';
+      try {
+        // Read the result for a short amount of time
+        const timeoutId = setTimeout(() => {
+          reader.cancel();
+        }, 1000);
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          if (value) {
+            result += value;
+            if (result.includes('>')) {
+              reader.cancel();
+              clearTimeout(timeoutId);
+              break;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error reading status:', error);
+      } finally {
+        reader.releaseLock();
+        await readableStreamClosed.catch(() => {});
+        await selectedPort.close();
+      }
+
+      setMachineStatus(result.trim() || 'No response');
+    } catch (err: any) {
+      console.error('Status Error:', err);
+      setError('Status check failed: ' + err.message);
     }
   };
 
@@ -289,13 +468,23 @@ function App() {
           </div>
 
           <div className="form-group">
-            <label>Margin Left</label>
+            <label>Left Margin</label>
             <input type="number" name="margin_left" value={config.margin_left} onChange={handleInputChange} />
           </div>
 
           <div className="form-group">
-            <label>Margin Top</label>
+            <label>Right Margin</label>
+            <input type="number" name="margin_right" value={config.margin_right} onChange={handleInputChange} />
+          </div>
+
+          <div className="form-group">
+            <label>Top Margin</label>
             <input type="number" name="margin_top" value={config.margin_top} onChange={handleInputChange} />
+          </div>
+
+          <div className="form-group">
+            <label>Bottom Margin</label>
+            <input type="number" name="margin_bottom" value={config.margin_bottom} onChange={handleInputChange} />
           </div>
 
           <div className="form-group">
@@ -337,18 +526,30 @@ function App() {
         </div>
       </aside>
 
-      {/* Column 3: Main Preview Area */}
+      {/* Main Content Area */}
       <main className="main-content">
         <header className="main-header">
           <h1>AutoWrite Preview</h1>
           <div className="header-actions">
-            <button className="btn btn-secondary" onClick={printGCode} disabled={!gcodeContent}>
-              <Printer size={16} />
-              Print
+            <button className="btn btn-secondary" onClick={checkStatus}>
+              <Activity size={16} />
+              Status
             </button>
+            {isPrinting ? (
+              <button className="btn btn-secondary" onClick={() => setShowPrintModal(true)}>
+                <Printer size={16} />
+                Show Progress
+              </button>
+            ) : (
+              <button className="btn btn-secondary" onClick={printGCode} disabled={!gcodeContent}>
+                <Printer size={16} />
+                Print
+              </button>
+            )}
           </div>
         </header>
         
+        {machineStatus && <div className="status-message" style={{ padding: '10px', backgroundColor: '#e8f4f8', color: '#0277bd', marginBottom: '20px', borderRadius: '4px' }}>Machine Status: {machineStatus}</div>}
         {error && <div className="error-message">{error}</div>}
 
         <div className="preview-pane">
@@ -364,6 +565,52 @@ function App() {
           )}
         </div>
       </main>
+
+      {/* Print Progress Modal */}
+      {showPrintModal && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="modal-content" style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', width: '600px', maxWidth: '90vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ margin: 0 }}>Printing Progress</h2>
+              <button onClick={() => setShowPrintModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ width: '100%', backgroundColor: '#eee', borderRadius: '4px', height: '12px', overflow: 'hidden' }}>
+                <div style={{ width: `${printProgress}%`, backgroundColor: '#007bff', height: '100%', transition: 'width 0.2s' }}></div>
+              </div>
+              <div style={{ textAlign: 'right', fontSize: '12px', color: '#666', marginTop: '4px' }}>{printProgress}% Complete</div>
+            </div>
+
+            <div style={{ flex: 1, backgroundColor: '#1e1e1e', color: '#d4d4d4', padding: '12px', borderRadius: '4px', overflowY: 'auto', maxHeight: '400px', fontFamily: 'monospace', fontSize: '12px', marginBottom: '16px' }}>
+              {printLogs.map((log, index) => (
+                <div key={index} style={{
+                  color: log.type === 'error' ? '#f48771' : 
+                         log.type === 'info' ? '#75beff' : 
+                         log.type === 'received' ? '#b5cea8' : '#d4d4d4',
+                  marginBottom: '2px',
+                  wordBreak: 'break-all'
+                }}>
+                  {log.type === 'sent' && '> '}
+                  {log.type === 'received' && '< '}
+                  {log.text}
+                </div>
+              ))}
+              <div ref={logsEndRef} />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              {isPrinting ? (
+                <button className="btn btn-secondary" onClick={cancelPrint} style={{ backgroundColor: '#dc3545', color: 'white', borderColor: '#dc3545' }}>
+                  <X size={16} /> Cancel Print
+                </button>
+              ) : (
+                <button className="btn btn-primary" onClick={() => setShowPrintModal(false)}>Close</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
